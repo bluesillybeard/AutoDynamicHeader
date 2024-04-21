@@ -1,4 +1,5 @@
 ﻿
+using System.Collections.Specialized;
 using System.Reflection.Metadata.Ecma335;
 using System.Text;
 
@@ -6,13 +7,6 @@ namespace AutoDynamicHeader;
 
 public sealed class Program {
     public static void Main(string[] args) {
-        // THE GOAL: Recreate what XDL does
-        // weird #ifdef extern "C"{} #endif stuff to make compiling on C++ work correctly
-        // typedef all function pointers
-        // declarations of all functions pointers (so they are stored somewhere)
-        // using #define to replace previous functions to use the new pointers
-        // a function that loads all of the functions from the library
-
         if(args.Length < 3) {
             Console.WriteLine(@"
             Usage: autodynamicheader [source] [destination] [name of load function]
@@ -30,7 +24,61 @@ public sealed class Program {
         // The only thing we care about is functions. All other syntax is useless.
         // We don't need an AST either. Each part of a function is a string.
         var functions = ParseFunctionDecls(source);
-        Console.WriteLine($"Found functions: {string.Join("\n", functions)}");
+
+        // Now we have the function, generating the new file is fairly simple actually
+        StringBuilder b = new StringBuilder();
+        // For each function, write a typedef for it
+        foreach(var function in functions) {
+            // As a reminder, here is the C function pointer syntax:
+            // [return type](*[function name])[arguments]
+            b.Append("typedef ");
+            b.Append(function.returnType);
+            b.Append("(*");
+            b.Append("PFN_");
+            b.Append(function.name);
+            b.Append(')');
+            // function.args includes the parenthesis
+            b.Append(function.args);
+            b.Append(";\n");
+        }
+
+        // For each function, write a function pointer for it.
+        foreach(var function in functions) {
+            // PFN_[name] src_[name]
+            b.Append("PFN_");
+            b.Append(function.name);
+            b.Append(" src_");
+            b.Append(function.name);
+            b.Append(";\n");
+        }
+
+        // For each function, use #define to replace calls to the original function to the function pointer
+        foreach(var function in functions) {
+            // #define [name] src_[name]
+            b.Append("#define ");
+            b.Append(function.name);
+            b.Append(" src_");
+            b.Append(function.name);
+            b.Append('\n');
+        }
+
+        // Finally, we have the load function.
+        b.Append("void ");
+        b.Append(args[2]);
+        b.Append("(void *(*load_fn)(const char* name)) {\n");
+        foreach(var function in functions) {
+            // src_[name] = (PFN_[name])load_fn("[name]");
+            b.Append("    src_");
+            b.Append(function.name);
+            b.Append(" = (PFN_");
+            b.Append(function.name);
+            b.Append(")load_fn(\"");
+            b.Append(function.name);
+            b.Append("\");\n");
+        }
+        b.Append('}');
+
+        File.WriteAllText(args[1], b.ToString());
     }
 
     static FunctionDecl[] ParseFunctionDecls(string source) {
@@ -117,19 +165,33 @@ public sealed class Program {
                     goto BreakCharLoop;
             }
         }
-        // Admittedly the goto could just be replaced with the return
         BreakCharLoop:
         // how the actual frick does String not have a reverse function?
         // I am concerningly frequently dissapointed by C#'s standard library
         // Thankfully I can convert it to a list and reverse that.
         var typeList = typeBuilder.ToString().ToList();
         typeList.Reverse();
-        // then use string.join because reasons
-        var typeString = string.Join(null, typeList);
         // I'm starting to think C# isn't actually that good at string processing,
         // Either that or I'm just dumb.
         var nameList = nameBuilder.ToString().ToList();
         nameList.Reverse();
+
+        // Unfortunately we have to handle an edge case: C allows for strange syntax where if the retyrn type is a pointer, the '*' can be on the function instead.
+        // Thankfully, the fix is easy: move any '*'s from the name to the return type.
+        while(true) {
+            if(nameList[0] == '*') {
+                typeList.Add('*');
+                nameList.RemoveAt(0);
+                continue;
+            }
+            // Whitespace is ignored in this case
+            if(whitespaceChars.Contains(nameList[0])) continue;
+            // The first character that is not a whitespace or * is part of the name, so it shall be ignored
+            break;
+        }
+        // Now we are done editing the list of chars for the type string, so we can turn it back into a string
+        // use string.join because I can't think of an easier way to do it.
+        var typeString = string.Join(null, typeList);
         var nameString = string.Join(null, nameList);
         return new FunctionDecl(typeString, nameString, args);
     }
@@ -201,11 +263,11 @@ struct FunctionDecl {
         args = arg;
     }
     // The return type
-    readonly string returnType;
+    public readonly string returnType;
     // the name of the function
-    readonly string name;
+    public readonly string name;
     // the arguments of a function, parenthesis included
-    readonly string args;
+    public readonly string args;
     // TODO: calling convention
     public override string ToString()
     {

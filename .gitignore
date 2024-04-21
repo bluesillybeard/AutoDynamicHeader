@@ -1,4 +1,5 @@
+# C# excludes
 bin/
 obj/
-XDL.h
-pinc.h
+# Everything in the out directory
+out/*
