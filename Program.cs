@@ -7,6 +7,12 @@ namespace AutoDynamicHeader;
 
 public sealed class Program {
     public static void Main(string[] args) {
+        if(args.Length < 1) {
+            Console.WriteLine(@"
+            Usage: autodynamicheader [source] [destination] [name of load function]
+            Use 'aytodynamicheader help' for a more in-depth help message.");
+            return;
+        }
         if(args[0] == "help") {
             Console.WriteLine(@"
             Usage: autodynamicheader [source] [destination] [name of load function]
