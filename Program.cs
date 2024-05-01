@@ -7,11 +7,26 @@ namespace AutoDynamicHeader;
 
 public sealed class Program {
     public static void Main(string[] args) {
+        if(args[0] == "help") {
+            Console.WriteLine(@"
+            Usage: autodynamicheader [source] [destination] [name of load function]
+            [source] and [destination] are relative or absolute paths to the source and destination header files.
+            [name of load function] is simply the name of the function used to load the proc addresses of functions.
+            autodynamic header looks for things that look like functions, meaning macros and other structures are ignored.
+            This means, pre-processing of the input file and post-processing of the output file is likely required.
+            To be specific, the following items are not handled correctly and/or are ignored:
+                - Macros
+                - calling convention
+                - keywords (extern, static, etc)
+                - pre-procesing statements (#include, #ifdef, etc)
+                - Pretty much anything C++
+                - probably a lot more
+            ");
+        }
         if(args.Length < 3) {
             Console.WriteLine(@"
             Usage: autodynamicheader [source] [destination] [name of load function]
-            The source and destination should be clear.
-            The name of the load function is just what the function to load all the functions is called.");
+            Use 'aytodynamicheader help' for a more in-depth help message.");
             return;
         }
 
@@ -20,7 +35,6 @@ public sealed class Program {
         // Remove comments, because they tend to have things that look like functions
         // (My favorite "function" in pinc.h is "lower will(generally);")
         source = RemoveComments(source);
-
         // The only thing we care about is functions. All other syntax is useless.
         // We don't need an AST either. Each part of a function is a string.
         var functions = ParseFunctionDecls(source);
@@ -99,6 +113,9 @@ public sealed class Program {
         // * is not part of the identifier but as far as we're concerned it is.
         var identifierChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890*_";
         var whitespaceChars = " \t\n";
+        // TODO: handle these edge cases:
+        // [type]*[name] -> no space between return type and function name
+        // [type] * [name] -> space between both return type and function name
 
         // Find the '(' in the declaration
         var argStart = bit.LastIndexOf('(');

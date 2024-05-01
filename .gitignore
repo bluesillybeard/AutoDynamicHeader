@@ -3,3 +3,5 @@ bin/
 obj/
 # Everything in the out directory
 out/*
+# temp files
+temp/

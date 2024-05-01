@@ -25,8 +25,19 @@ void xload(void *(*load_fn)(const char* name)) {
 ```
 The function takes a function pointer to a function that will load the function given the function's name.
 
-## Notes
-This utility DOES NOT properly support C++ headers. It simply looks for things that look like function declarations, and goes based off of that. Also, it is intended to do the tedious part of writing a loader header, some manual post-processing of the resulting artifact may be required.
+## Important things to know
 
-The resulting .h file currently may or may not work in C++.
+autodynamic header looks for things that look like functions, meaning macros and other structures are ignored.
+This means, pre-processing of the input file and post-processing of the output file is likely required.
+To be specific, the following items are not handled correctly and/or are ignored:
+    - Macros
+    - calling convention
+    - keywords (extern, static, etc)
+    - pre-procesing statements (#include, #ifdef, etc)
+    - Pretty much anything C++
+    - probably a lot more
 
+## TODO
+- macros for adding things like calling conventions and other function declaration things eaiser
+- C++ filtering (the #ifdef + extern "C" crap)
+- fix edge cases with functions that return pointers
